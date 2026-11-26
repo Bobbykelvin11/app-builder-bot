@@ -100,3 +100,9 @@ hooks:
   user_defines:
     llamadart:
       llamadart_native_runtimes: [llama_cpp]
+      # Android: CPU only. Skips the ~26 MB Vulkan module per ABI (Vulkan on
+      # phone GPUs is often slower or unstable for llama.cpp). iOS uses Metal.
+      llamadart_native_backends:
+        platforms:
+          android-arm64: [cpu]
+          android-x64: [cpu]

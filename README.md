@@ -50,7 +50,7 @@ Create a Vercel project with **Root Directory = `vercel`** and framework preset 
 
 ### On-device mode (default, open source, offline)
 
-The app runs an open-source code model locally with [llama.cpp](https://github.com/ggml-org/llama.cpp) through [`llamadart`](https://pub.dev/packages/llamadart) (MIT) and `llamadart_llama_cpp_flutter` (iOS XCFrameworks, Metal). No server, no API key and no internet after the one-time model download.
+The app runs an open-source code model locally with [llama.cpp](https://github.com/ggml-org/llama.cpp) through [`llamadart`](https://pub.dev/packages/llamadart) (MIT) and `llamadart_llama_cpp_flutter` (iOS XCFrameworks). iPhones use the GPU (Metal); Android runs on the CPU (the Vulkan module is left out to keep the APK small). No server, no API key and no internet after the one-time model download.
 
 | Model (Apache-2.0) | Download | Recommended phone |
 | --- | --- | --- |
