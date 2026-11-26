@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>App Builder</title>
+  <style>
+    :root { --bg:#f7f8fc; --card:#fff; --text:#172033; --muted:#5b6478; --accent:#4f46e5; --border:#d9deea; --code:#f1f3f9; --err:#b42318; --ok:#067647; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#0f1220; --card:#171b2e; --text:#e7e9f3; --muted:#9aa2b8; --accent:#8b85ff; --border:#2a3050; --code:#0b0e1a; --err:#ff8a80; --ok:#7ee2a8; } }
+    * { box-sizing: border-box; }
+    body { font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+    main { max-width: 880px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    h1 { margin: 0 0 .25rem; font-size: 1.8rem; }
+    p.lead { color: var(--muted); margin-top: 0; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.1rem; margin: 1rem 0; }
+    label { font-weight: 600; display: block; margin-bottom: .35rem; }
+    textarea, input { width: 100%; padding: .75rem; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font: inherit; }
+    textarea { min-height: 130px; resize: vertical; }
+    .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .75rem; }
+    button { font: inherit; border: 0; border-radius: 999px; padding: .6rem 1.2rem; background: var(--accent); color: #fff; cursor: pointer; }
+    button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .counter { color: var(--muted); font-size: .85rem; margin-left: auto; }
+    #status { min-height: 1.5em; margin-top: .6rem; }
+    #status.err { color: var(--err); } #status.ok { color: var(--ok); }
+    pre { white-space: pre; overflow: auto; background: var(--code); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; max-height: 65vh; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .note { color: var(--muted); font-size: .9rem; }
+    .spinner { display: inline-block; width: 1em; height: 1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: .4rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    details summary { cursor: pointer; color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>App Builder</h1>
+  <p class="lead">Describe an app and get a starter Flutter <code>lib/main.dart</code>.</p>
+
+  <div class="card">
+    <details id="keyBox">
+      <summary>App key (required, saved in this browser only)</summary>
+      <div class="row"><input id="appKey" type="password" autocomplete="off" placeholder="Paste your App key"><button class="secondary" id="saveKey" type="button">Save key</button></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <label for="prompt">Your app idea</label>
+    <textarea id="prompt" maxlength="4000" placeholder="A habit tracker with a daily checklist, streaks and a dark theme…"></textarea>
+    <div class="row">
+      <button id="go" type="button">Generate Flutter code</button>
+      <span class="counter" id="count">0 / 4000</span>
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+  </div>
+
+  <div class="card" id="resultCard" hidden>
+    <div class="row" style="margin-top:0">
+      <strong id="fileName">lib/main.dart</strong>
+      <span style="margin-left:auto"></span>
+      <button class="secondary" id="copy" type="button">Copy</button>
+      <button class="secondary" id="download" type="button">Download .dart</button>
+    </div>
+    <pre id="result"></pre>
+  </div>
+
+  <p class="note">This generates Flutter source code only. It is not compiled or tested, and it is not an installable app by itself. Review it before you use it.</p>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const keyInput = $('appKey'), prompt = $('prompt'), go = $('go'), status = $('status');
+  const result = $('result'), card = $('resultCard'), count = $('count');
+  let lastCode = '';
+
+  keyInput.value = localStorage.getItem('appKey') || '';
+  if (!keyInput.value) $('keyBox').open = true;
+  $('saveKey').onclick = () => { localStorage.setItem('appKey', keyInput.value.trim()); setStatus('App key saved in this browser.', 'ok'); };
+
+  const updateCount = () => { count.textContent = `${prompt.value.length} / 4000`; };
+  prompt.addEventListener('input', updateCount); updateCount();
+
+  function setStatus(text, kind = '', busy = false) {
+    status.className = kind;
+    status.innerHTML = '';
+    if (busy) { const s = document.createElement('span'); s.className = 'spinner'; status.appendChild(s); }
+    status.appendChild(document.createTextNode(text));
+  }
+
+  function friendly(data, r) {
+    let d = data && data.detail;
+    if (Array.isArray(d)) d = d.map((x) => x.msg || JSON.stringify(x)).join('; ');
+    if (typeof d === 'object' && d) d = JSON.stringify(d);
+    return d || `Request failed (HTTP ${r.status}).`;
+  }
+
+  go.onclick = async () => {
+    const text = prompt.value.trim();
+    const key = (keyInput.value || '').trim();
+    if (!key) { $('keyBox').open = true; keyInput.focus(); return setStatus('Add your App key first.', 'err'); }
+    if (!text) { prompt.focus(); return setStatus('Describe the app you want first.', 'err'); }
+    if (text.length < 8) { prompt.focus(); return setStatus('Please write at least 8 characters.', 'err'); }
+    localStorage.setItem('appKey', key);
+    go.disabled = true; go.textContent = 'Working…';
+    setStatus('Generating… this can take up to a minute.', '', true);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 70000);
+    try {
+      const r = await fetch('/api/generate', { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', 'X-App-Key': key }, body: JSON.stringify({ prompt: text }) });
+      let data = null; try { data = await r.json(); } catch { /* non-JSON */ }
+      if (!r.ok) throw new Error(friendly(data, r));
+      if (!data || !data.code) throw new Error('The server returned no code.');
+      lastCode = data.code;
+      $('fileName').textContent = data.file || 'lib/main.dart';
+      result.textContent = data.code;
+      card.hidden = false;
+      setStatus('Done.', 'ok');
+    } catch (e) {
+      const msg = e.name === 'AbortError' ? 'The request timed out. Try again with a shorter idea.' : (e.message === 'Failed to fetch' ? 'Network error. Check your connection.' : e.message);
+      setStatus(msg, 'err');
+    } finally {
+      clearTimeout(t); go.disabled = false; go.textContent = 'Generate Flutter code';
+    }
+  };
+
+  $('copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(lastCode); setStatus('Copied to clipboard.', 'ok'); }
+    catch { setStatus('Copy failed. Select the code and copy it manually.', 'err'); }
+  };
+  $('download').onclick = () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([lastCode], { type: 'text/plain' }));
+    a.download = 'main.dart'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+})();
+</script>
+</body>
+</html>
