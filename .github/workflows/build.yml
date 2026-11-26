@@ -2,51 +2,100 @@ name: Build mobile artifacts
 
 on:
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Generator API base URL baked into the app (empty = API_BASE_URL repo variable, else the app's default)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
+env:
+  FLUTTER_VERSION: "3.50.1"
+
 jobs:
-  android:
+  test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Create Flutter project and add client
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  android:
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Generate Android platform folder
+        run: bash tool/prepare_platforms.sh android
+      - name: Build release APKs
+        env:
+          # Secrets are masked in logs. APP_KEY is optional; without it users enter the key in Settings.
+          APP_KEY: ${{ secrets.APP_KEY }}
+          API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL }}
         run: |
-          flutter create --platforms=android --project-name app_builder_mobile mobile_build
-          cp mobile/lib/main.dart mobile_build/lib/main.dart
-      - name: Build release APK
-        working-directory: mobile_build
-        run: flutter build apk --release
+          args=()
+          if [ -n "$API_BASE_URL" ]; then args+=("--dart-define=API_BASE_URL=$API_BASE_URL"); fi
+          if [ -n "$APP_KEY" ]; then args+=("--dart-define=APP_KEY=$APP_KEY"); else echo "::notice::APP_KEY secret not set; the app will ask for the key in Settings."; fi
+          flutter build apk --release "${args[@]}"
+          cp build/app/outputs/flutter-apk/app-release.apk ../AppBuilder-universal.apk
+          flutter build apk --release --split-per-abi --target-platform android-arm64 "${args[@]}"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../AppBuilder-arm64.apk
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: mobile_build/build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            AppBuilder-universal.apk
+            AppBuilder-arm64.apk
           if-no-files-found: error
 
   ios-unsigned:
+    needs: test
     runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: mobile
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Create Flutter project and add client
-        run: |
-          flutter create --platforms=ios --project-name app_builder_mobile mobile_build
-          cp mobile/lib/main.dart mobile_build/lib/main.dart
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Generate iOS platform folder
+        run: bash tool/prepare_platforms.sh ios
       - name: Build unsigned iOS app and package IPA
-        working-directory: mobile_build
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL }}
         run: |
-          flutter build ios --release --no-codesign
-          mkdir -p ipa/Payload
+          args=()
+          if [ -n "$API_BASE_URL" ]; then args+=("--dart-define=API_BASE_URL=$API_BASE_URL"); fi
+          if [ -n "$APP_KEY" ]; then args+=("--dart-define=APP_KEY=$APP_KEY"); fi
+          flutter build ios --release --no-codesign "${args[@]}"
+          rm -rf ipa && mkdir -p ipa/Payload
           cp -R build/ios/iphoneos/Runner.app ipa/Payload/Runner.app
-          (cd ipa && zip -qr ../app-builder-unsigned.ipa Payload)
+          (cd ipa && zip -qry ../../AppBuilder-unsigned.ipa Payload)
       - uses: actions/upload-artifact@v4
         with:
           name: unsigned-ios-ipa
-          path: mobile_build/app-builder-unsigned.ipa
+          path: AppBuilder-unsigned.ipa
           if-no-files-found: error

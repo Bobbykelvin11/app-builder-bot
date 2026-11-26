@@ -1,0 +1,9 @@
+# Platform folders are generated in CI by tool/prepare_platforms.sh
+/android/
+/ios/
+/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.idea/
+*.iml
