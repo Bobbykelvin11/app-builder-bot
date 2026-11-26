@@ -1,0 +1,52 @@
+name: Build mobile artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Create Flutter project and add client
+        run: |
+          flutter create --platforms=android --project-name app_builder_mobile mobile_build
+          cp mobile/lib/main.dart mobile_build/lib/main.dart
+      - name: Build release APK
+        working-directory: mobile_build
+        run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: mobile_build/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  ios-unsigned:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Create Flutter project and add client
+        run: |
+          flutter create --platforms=ios --project-name app_builder_mobile mobile_build
+          cp mobile/lib/main.dart mobile_build/lib/main.dart
+      - name: Build unsigned iOS app and package IPA
+        working-directory: mobile_build
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app ipa/Payload/Runner.app
+          (cd ipa && zip -qr ../app-builder-unsigned.ipa Payload)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-ios-ipa
+          path: mobile_build/app-builder-unsigned.ipa
+          if-no-files-found: error
