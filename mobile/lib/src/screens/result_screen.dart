@@ -11,9 +11,11 @@ class ResultScreen extends StatelessWidget {
     super.key,
     required this.generation,
     this.fromHistory = false,
+    this.isTemplate = false,
   });
   final Generation generation;
   final bool fromHistory;
+  final bool isTemplate;
 
   Future<void> _copy(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: generation.code));
@@ -98,6 +100,28 @@ class ResultScreen extends StatelessWidget {
               onPressed: () => _share(btnContext),
             ),
           ),
+          if (isTemplate)
+            IconButton(
+              tooltip: 'Save to history',
+              icon: const Icon(Icons.bookmark_add_outlined),
+              onPressed: () async {
+                await AppStateScope.read(context).addToHistory(
+                  Generation(
+                    id: DateTime.now().microsecondsSinceEpoch.toString(),
+                    prompt: generation.prompt,
+                    code: generation.code,
+                    file: generation.file,
+                    createdAt: DateTime.now(),
+                    source: 'template',
+                  ),
+                );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Saved to history')),
+                  );
+                }
+              },
+            ),
           if (fromHistory)
             IconButton(
               tooltip: 'Delete',
@@ -122,8 +146,9 @@ class ResultScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                '${generation.lineCount} lines'
-                '${generation.model != null ? ' • ${generation.model}' : ''}',
+                '${generation.sourceLabel} • ${generation.lineCount} lines'
+                '${generation.model != null ? ' • ${generation.model}' : ''}'
+                '${generation.stopped ? ' • stopped early, may be incomplete' : ''}',
                 style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12),
               ),
             ),

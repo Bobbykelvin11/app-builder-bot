@@ -4,7 +4,8 @@ import '../app.dart';
 import '../config.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, required this.onOpenTab});
+  final ValueChanged<int> onOpenTab;
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -103,7 +104,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Server', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Generation engine',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(
+                value: true,
+                label: Text('On this phone'),
+                icon: Icon(Icons.offline_bolt),
+              ),
+              ButtonSegment(
+                value: false,
+                label: Text('Server'),
+                icon: Icon(Icons.cloud_outlined),
+              ),
+            ],
+            selected: {state.useDevice},
+            onSelectionChanged: (s) => state.setUseDevice(s.first),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            state.useDevice
+                ? 'Uses the open-source model on your phone. Works offline, no API key.'
+                : 'Uses the App Builder server. Needs internet and an App key.',
+            style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.memory),
+            title: const Text('On-device model'),
+            subtitle: Text(state.selectedModel.name),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => widget.onOpenTab(Tabs.model),
+          ),
+          const Divider(height: 32),
+          Text(
+            'Server (optional)',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _url,
@@ -188,7 +229,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text('About', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Text(
-            'App Builder 2.0.0',
+            'App Builder 2.1.0',
             style: TextStyle(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 6),
