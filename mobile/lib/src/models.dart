@@ -6,6 +6,8 @@ class Generation {
     required this.file,
     required this.createdAt,
     this.model,
+    this.source = 'server',
+    this.stopped = false,
   });
 
   final String id;
@@ -14,6 +16,18 @@ class Generation {
   final String file;
   final DateTime createdAt;
   final String? model;
+
+  /// 'device', 'server' or 'template'.
+  final String source;
+
+  /// True when the user stopped an on-device generation early.
+  final bool stopped;
+
+  String get sourceLabel => switch (source) {
+    'device' => 'On-device',
+    'template' => 'Template',
+    _ => 'Server',
+  };
 
   int get lineCount => '\n'.allMatches(code).length + 1;
 
@@ -42,6 +56,8 @@ class Generation {
           DateTime.tryParse((json['createdAt'] as String?) ?? '') ??
           DateTime.now(),
       model: json['model'] as String?,
+      source: (json['source'] as String?) ?? 'server',
+      stopped: json['stopped'] == true,
     );
   }
 }

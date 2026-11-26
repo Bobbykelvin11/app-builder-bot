@@ -14,6 +14,8 @@ class Store {
   static const _kApiUrl = 'api_base_url_override';
   static const _kAppKey = 'app_key_override';
   static const _kThemeMode = 'theme_mode';
+  static const _kEngine = 'engine_mode';
+  static const _kModel = 'local_model_id';
 
   final SharedPreferences _prefs;
 
@@ -59,6 +61,13 @@ class Store {
 
   String get themeMode => _prefs.getString(_kThemeMode) ?? 'system';
   Future<void> setThemeMode(String mode) => _prefs.setString(_kThemeMode, mode);
+
+  /// 'device' (default, on-device open-source model) or 'server' (Vercel API).
+  String get engineMode => _prefs.getString(_kEngine) ?? 'device';
+  Future<void> setEngineMode(String mode) => _prefs.setString(_kEngine, mode);
+
+  String? get localModelId => _prefs.getString(_kModel);
+  Future<void> setLocalModelId(String id) => _prefs.setString(_kModel, id);
 
   Future<void> _setOrRemove(String key, String? value) async {
     final v = value?.trim();
