@@ -5,10 +5,14 @@ import 'package:material_ui/material_ui.dart';
 import '../api.dart';
 import '../app.dart';
 import '../config.dart';
+import '../local/model_manager.dart';
+import 'generate_screen.dart';
 import 'result_screen.dart';
 
 class BuildScreen extends StatefulWidget {
-  const BuildScreen({super.key});
+  const BuildScreen({super.key, required this.onOpenTab});
+  final ValueChanged<int> onOpenTab;
+
   @override
   State<BuildScreen> createState() => _BuildScreenState();
 }
@@ -33,7 +37,7 @@ class _BuildScreenState extends State<BuildScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_loadedDraft) {
-      _controller.text = AppStateScope.of(context).store.draft;
+      _controller.text = AppStateScope.read(context).store.draft;
       _loadedDraft = true;
     }
   }
@@ -51,7 +55,7 @@ class _BuildScreenState extends State<BuildScreen> {
     _draftTimer?.cancel();
     _draftTimer = Timer(
       const Duration(milliseconds: 400),
-      () => AppStateScope.of(context).store.setDraft(value),
+      () => AppStateScope.read(context).store.setDraft(value),
     );
     setState(() {});
   }
@@ -76,7 +80,32 @@ class _BuildScreenState extends State<BuildScreen> {
       return;
     }
     FocusScope.of(context).unfocus();
-    final state = AppStateScope.of(context);
+    final state = AppStateScope.read(context);
+
+    if (state.useDevice) {
+      final model = state.selectedModel;
+      if (!state.models.isReady(model)) {
+        setState(
+          () => _error = 'Download the on-device model first (Model tab), or use a template.',
+        );
+        return;
+      }
+      if (state.local.isBusy) {
+        setState(
+          () => _error =
+              'A generation is still running. Wait for it or stop it first.',
+        );
+        return;
+      }
+      setState(() => _error = null);
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GenerateScreen(prompt: text, model: model),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -113,11 +142,58 @@ class _BuildScreenState extends State<BuildScreen> {
     }
   }
 
+  Widget _engineCard(BuildContext context) {
+    final state = AppStateScope.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    if (!state.useDevice) {
+      final hasKey = state.store.effectiveAppKey.isNotEmpty;
+      return Card(
+        child: ListTile(
+          leading: const Icon(Icons.cloud_outlined),
+          title: const Text('Using the server'),
+          subtitle: Text(
+            hasKey
+                ? 'Needs internet.'
+                : 'Add your App key in Settings to use the server.',
+          ),
+          trailing: TextButton(
+            onPressed: () => state.setUseDevice(true),
+            child: const Text('Use phone'),
+          ),
+        ),
+      );
+    }
+    final model = state.selectedModel;
+    final status = state.models.statusOf(model);
+    final ready = status.state == ModelState.ready;
+    final downloading = status.state == ModelState.downloading;
+    return Card(
+      color: ready ? null : scheme.tertiaryContainer,
+      child: ListTile(
+        leading: Icon(
+          ready ? Icons.offline_bolt : Icons.download_for_offline,
+          color: ready ? scheme.primary : scheme.onTertiaryContainer,
+        ),
+        title: Text(
+          ready ? 'On-device: ${model.name}' : 'On-device model not downloaded',
+        ),
+        subtitle: Text(
+          ready
+              ? 'Works offline. No server or API key.'
+              : downloading
+              ? 'Downloading… ${(state.models.progressOf(model) * 100).toStringAsFixed(0)}%'
+              : 'Download ${model.sizeLabel} once, or start from a template.',
+        ),
+        trailing: ready ? null : const Icon(Icons.chevron_right),
+        onTap: ready ? null : () => widget.onOpenTab(Tabs.model),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final length = _controller.text.trim().length;
-    final hasKey = AppStateScope.of(context).store.effectiveAppKey.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('App Builder')),
       body: SafeArea(
@@ -133,18 +209,9 @@ class _BuildScreenState extends State<BuildScreen> {
               'App Builder writes a starter Flutter lib/main.dart for your idea.',
               style: TextStyle(color: scheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 12),
-            if (!hasKey)
-              Card(
-                color: scheme.tertiaryContainer,
-                child: ListTile(
-                  leading: Icon(Icons.key, color: scheme.onTertiaryContainer),
-                  title: Text(
-                    'Add your App key in Settings to start generating.',
-                    style: TextStyle(color: scheme.onTertiaryContainer),
-                  ),
-                ),
-              ),
+            const SizedBox(height: 8),
+            _engineCard(context),
+            const SizedBox(height: 8),
             TextField(
               controller: _controller,
               focusNode: _focus,
@@ -181,7 +248,7 @@ class _BuildScreenState extends State<BuildScreen> {
                     style: TextStyle(color: scheme.onErrorContainer),
                   ),
                   subtitle: Text(
-                    'Your prompt is saved as a draft.',
+                    'Switch to the on-device model to work offline.',
                     style: TextStyle(color: scheme.onErrorContainer),
                   ),
                 ),
@@ -207,6 +274,12 @@ class _BuildScreenState extends State<BuildScreen> {
               const SizedBox(height: 12),
               const LinearProgressIndicator(),
             ],
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => widget.onOpenTab(Tabs.templates),
+              icon: const Icon(Icons.dashboard_outlined),
+              label: const Text('Browse ready-made templates (offline)'),
+            ),
             const SizedBox(height: 20),
             Text(
               'Try an example',
